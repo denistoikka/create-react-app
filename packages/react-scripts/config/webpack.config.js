@@ -51,6 +51,25 @@ const imageInlineSizeLimit = parseInt(
   process.env.IMAGE_INLINE_SIZE_LIMIT || '10000'
 );
 
+const collectHtmlsRecursively = (absoluteDir, relativeDir) => {
+    let result = [];
+    fs.readdirSync(absoluteDir).forEach(file => {
+        let absolutePath = path.join(absoluteDir, file);
+        let realtivePath = path.join(relativeDir, file);
+
+        if(fs.lstatSync(absolutePath).isDirectory()) {
+            result = result.concat(collectHtmlsRecursively(absolutePath, realtivePath));
+
+        } else if (absolutePath.endsWith(".html")) {
+            result.push({template: absolutePath, filename: realtivePath});
+        }
+    });
+    return result;
+};
+
+// Return all html files from public directory
+const collectPublicHtmls = () => collectHtmlsRecursively(paths.appPublic, "");
+
 // Check if TypeScript is setup
 const useTypeScript = fs.existsSync(paths.appTsConfig);
 
@@ -142,6 +161,26 @@ module.exports = function(webpackEnv) {
     return loaders;
   };
 
+  const entry = {};
+  if (isEnvDevelopment) {
+      // Include an alternative client for WebpackDevServer. A client's job is to
+      // connect to WebpackDevServer by a socket and get notified about changes.
+      // When you save a file, the client will either apply hot updates (in case
+      // of CSS changes), or refresh the page (in case of JS changes). When you
+      // make a syntax error, this client will display a syntax error overlay.
+      // Note: instead of the default WebpackDevServer client, we use a custom one
+      // to bring better experience for Create React App users. You can replace
+      // the line below with these two lines if you prefer the stock client:
+      // require.resolve('webpack-dev-server/client') + '?/',
+      // require.resolve('webpack/hot/dev-server'),
+      entry.main = require.resolve('react-dev-utils/webpackHotDevClient');
+  }
+    // Finally, this is your app's code:
+    entry.index = paths.appIndexJs;
+    // We include the app code last so that if there is a runtime error during
+    // initialization, it doesn't blow up the WebpackDevServer client, and
+    // changing JS code would still trigger a refresh.
+
   return {
     mode: isEnvProduction ? 'production' : isEnvDevelopment && 'development',
     // Stop compilation early in production
@@ -153,25 +192,7 @@ module.exports = function(webpackEnv) {
       : isEnvDevelopment && 'cheap-module-source-map',
     // These are the "entry points" to our application.
     // This means they will be the "root" imports that are included in JS bundle.
-    entry: [
-      // Include an alternative client for WebpackDevServer. A client's job is to
-      // connect to WebpackDevServer by a socket and get notified about changes.
-      // When you save a file, the client will either apply hot updates (in case
-      // of CSS changes), or refresh the page (in case of JS changes). When you
-      // make a syntax error, this client will display a syntax error overlay.
-      // Note: instead of the default WebpackDevServer client, we use a custom one
-      // to bring better experience for Create React App users. You can replace
-      // the line below with these two lines if you prefer the stock client:
-      // require.resolve('webpack-dev-server/client') + '?/',
-      // require.resolve('webpack/hot/dev-server'),
-      isEnvDevelopment &&
-        require.resolve('react-dev-utils/webpackHotDevClient'),
-      // Finally, this is your app's code:
-      paths.appIndexJs,
-      // We include the app code last so that if there is a runtime error during
-      // initialization, it doesn't blow up the WebpackDevServer client, and
-      // changing JS code would still trigger a refresh.
-    ].filter(Boolean),
+    entry: entry,
     output: {
       // The build folder.
       path: isEnvProduction ? paths.appBuild : undefined,
@@ -557,33 +578,26 @@ module.exports = function(webpackEnv) {
         },
       ],
     },
-    plugins: [
-      // Generates an `index.html` file with the <script> injected.
-      new HtmlWebpackPlugin(
-        Object.assign(
-          {},
-          {
-            inject: true,
-            template: paths.appHtml,
-          },
-          isEnvProduction
-            ? {
-                minify: {
-                  removeComments: true,
-                  collapseWhitespace: true,
-                  removeRedundantAttributes: true,
-                  useShortDoctype: true,
-                  removeEmptyAttributes: true,
-                  removeStyleLinkTypeAttributes: true,
-                  keepClosingSlash: true,
-                  minifyJS: true,
-                  minifyCSS: true,
-                  minifyURLs: true,
-                },
-              }
-            : undefined
-        )
-      ),
+    plugins: collectPublicHtmls().map(({template, filename}) => {
+      return new HtmlWebpackPlugin({
+        inject:   true,
+        filename: filename,
+        template: template,
+        chunks:   ['index'],
+        minify:   isEnvProduction ? {
+          removeComments:                true,
+          collapseWhitespace:            true,
+          removeRedundantAttributes:     true,
+          useShortDoctype:               true,
+          removeEmptyAttributes:         true,
+          removeStyleLinkTypeAttributes: true,
+          keepClosingSlash:              true,
+          minifyJS:                      true,
+          minifyCSS:                     true,
+          minifyURLs:                    true,
+        } : undefined
+      })
+    }).concat(
       // Inlines the webpack runtime script. This script is too small to warrant
       // a network request.
       isEnvProduction &&
@@ -693,7 +707,7 @@ module.exports = function(webpackEnv) {
           // The formatter is invoked directly in WebpackDevServerUtils during development
           formatter: isEnvProduction ? typescriptFormatter : undefined,
         }),
-    ].filter(Boolean),
+    ).filter(Boolean),
     // Some libraries import Node modules but don't use them in the browser.
     // Tell Webpack to provide empty mocks for them so importing them works.
     node: {
