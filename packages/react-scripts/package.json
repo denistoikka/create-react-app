@@ -1,6 +1,6 @@
 {
   "name": "denistoikka-react-scripts",
-  "version": "3.1.20",
+  "version": "3.1.22",
   "description": "Configuration and scripts for Create React App.",
   "repository": {
     "type": "git",
@@ -29,6 +29,8 @@
   "types": "./lib/react-app.d.ts",
   "dependencies": {
     "@babel/core": "7.5.5",
+    "@babel/plugin-proposal-class-properties": "7.5.5",
+    "@babel/plugin-proposal-decorators": "7.6.0",
     "@svgr/webpack": "4.3.2",
     "@typescript-eslint/eslint-plugin": "1.13.0",
     "@typescript-eslint/parser": "1.13.0",
